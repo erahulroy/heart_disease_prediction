@@ -1,5 +1,6 @@
 #link to run code: https://colab.research.google.com/drive/1fI3s9vgE0GmIDXLgpnB7zYN9CXhbsg_j?usp=sharing
 
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,79 +19,8 @@ warnings.filterwarnings('ignore')
 
 
 # Load the dataset
-def load_data(file_path):
-    print("Loading data...")
+def load_data():
     df = pd.read_csv('/content/heart.csv')
-    print(f"Dataset loaded with {df.shape[0]} rows and {df.shape[1]} columns")
-    return df
-
-
-# Function for exploratory data analysis
-def explore_data(df):
-    print("\n--- Exploratory Data Analysis ---")
-
-    # Display basic info
-    print("\nBasic Information:")
-    print(f"Shape: {df.shape}")
-    print("\nFirst 5 rows:")
-    print(df.head())
-
-    # Check for missing values
-    print("\nMissing values:")
-    print(df.isnull().sum())
-
-    # Statistical summary
-    print("\nStatistical Summary:")
-    print(df.describe())
-
-    # Target variable distribution
-    print("\nTarget Variable Distribution:")
-    target_counts = df['target'].value_counts()
-    print(target_counts)
-
-    # Create visualizations
-    plt.figure(figsize=(12, 8))
-
-    # Age distribution
-    plt.subplot(2, 3, 1)
-    sns.histplot(data=df, x='age', hue='target', kde=True, palette=['green', 'red'])
-    plt.title('Age Distribution by Target')
-
-    # Chest pain type distribution
-    plt.subplot(2, 3, 2)
-    sns.countplot(data=df, x='cp', hue='target', palette=['green', 'red'])
-    plt.title('Chest Pain Type by Target')
-
-    # Resting blood pressure vs. target
-    plt.subplot(2, 3, 3)
-    sns.boxplot(data=df, x='target', y='trestbps', palette=['green', 'red'])
-    plt.title('Resting Blood Pressure vs. Target')
-
-    # Cholesterol vs. target
-    plt.subplot(2, 3, 4)
-    sns.boxplot(data=df, x='target', y='chol', palette=['green', 'red'])
-    plt.title('Cholesterol vs. Target')
-
-    # Max heart rate vs. target
-    plt.subplot(2, 3, 5)
-    sns.boxplot(data=df, x='target', y='thalach', palette=['green', 'red'])
-    plt.title('Max Heart Rate vs. Target')
-
-    # Gender distribution
-    plt.subplot(2, 3, 6)
-    sns.countplot(data=df, x='sex', hue='target', palette=['green', 'red'])
-    plt.title('Gender Distribution by Target')
-
-    plt.tight_layout()
-    plt.show()
-
-    # Correlation heatmap
-    plt.figure(figsize=(12, 10))
-    correlation = df.corr()
-    sns.heatmap(correlation, annot=True, cmap='coolwarm', fmt='.2f')
-    plt.title('Correlation Heatmap')
-    plt.show()
-
     return df
 
 
@@ -306,64 +236,44 @@ def get_feature_importance(model, feature_names):
         print("This model doesn't support feature importance.")
 
 
-# Main function
+# Modified main function to automatically train and go to prediction
 def main():
     print("=== Heart Disease Prediction System ===")
 
-    # Ask for file path
-    file_path = input("Enter the path to your CSV file (or press Enter to use 'heart.csv'): ")
-    if not file_path:
-        file_path = 'heart.csv'
+    # Load data directly with fixed path
+    df = load_data()
+    
+    try:
+        # Try to load existing model first
+        print("Checking for existing model...")
+        model, scaler, feature_names = load_model()
+        print("Existing model found!")
+    except FileNotFoundError:
+        print("No existing model found. Training new models...")
+        # Preprocess data
+        X_train_scaled, X_test_scaled, y_train, y_test, scaler, feature_names = preprocess_data(df)
 
-    # Load and explore data
-    df = load_data(file_path)
+        # Train and evaluate models
+        best_models, results = train_and_evaluate_models(X_train_scaled, X_test_scaled, y_train, y_test)
 
-    while True:
-        print("\nChoose an option:")
-        print("1. Explore data")
-        print("2. Train models")
-        print("3. Make a prediction")
-        print("4. Exit")
+        # Find best model
+        best_model_name = max(results.items(), key=lambda x: x[1]['accuracy'])[0]
+        best_model = results[best_model_name]['model']
 
-        choice = input("Enter your choice (1-4): ")
-
-        if choice == '1':
-            df = explore_data(df)
-
-        elif choice == '2':
-            # Preprocess data
-            X_train_scaled, X_test_scaled, y_train, y_test, scaler, feature_names = preprocess_data(df)
-
-            # Train and evaluate models
-            best_models, results = train_and_evaluate_models(X_train_scaled, X_test_scaled, y_train, y_test)
-
-            # Find best model
-            best_model_name = max(results.items(), key=lambda x: x[1]['accuracy'])[0]
-            best_model = results[best_model_name]['model']
-
-            # Save best model
-            model_file, scaler_file = save_model(best_model, scaler, feature_names)
-
-            # Show feature importance for Random Forest
-            if best_model_name == 'Random Forest':
-                get_feature_importance(best_model, feature_names)
-
-        elif choice == '3':
-            try:
-                # Load model
-                model, scaler, feature_names = load_model()
-
-                # Make prediction
-                prediction, prediction_proba = predict_heart_disease(model, scaler, feature_names)
-            except FileNotFoundError:
-                print("Model files not found. Please train the models first.")
-
-        elif choice == '4':
-            print("Thank you for using the Heart Disease Prediction System. Goodbye!")
-            break
-
-        else:
-            print("Invalid choice. Please try again.")
+        # Save best model
+        model_file, scaler_file = save_model(best_model, scaler, feature_names)
+        
+        # Show feature importance for Random Forest
+        if best_model_name == 'Random Forest':
+            get_feature_importance(best_model, feature_names)
+        
+        # Reload model to ensure consistency
+        model, scaler, feature_names = load_model()
+    
+    # Make prediction
+    predict_heart_disease(model, scaler, feature_names)
+    
+    print("Thank you for using the Heart Disease Prediction System. Goodbye!")
 
 
 if __name__ == "__main__":
